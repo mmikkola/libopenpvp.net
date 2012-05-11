@@ -42,6 +42,8 @@
   <ItemGroup>
     <Compile Include="AMF3Encoder.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RTMPPacketReader.cs" />
+    <Compile Include="RTMPSClient.cs" />
     <Compile Include="TypedObject.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
