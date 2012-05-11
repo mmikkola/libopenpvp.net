@@ -21,5 +21,10 @@ namespace libopenpvp.net
         {
             throw new NotImplementedException();
         }
+
+        internal TypedObject GetPacket(int packet)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
