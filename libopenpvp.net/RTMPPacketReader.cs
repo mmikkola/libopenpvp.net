@@ -26,5 +26,12 @@ namespace libopenpvp.net
         {
             throw new NotImplementedException();
         }
+
+        public bool running { get; set; }
+
+        internal TypedObject PeekPacket(int id)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
