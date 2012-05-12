@@ -5,16 +5,16 @@ using System.Text;
 
 namespace libopenpvp.net
 {
-    class TypedObject : Dictionary<String, Object>
+    public class TypedObject : Dictionary<string, Object>
     {
-        public String Type;
+        public string Type;
 
         /// <summary>
         /// Initializes the type of the object
         /// null type  implies a dynamic object (userd for headers)
         /// </summary>
         /// <param name="type"> The type of the object</param>
-        public TypedObject(String type)
+        public TypedObject(string type)
         {
             this.Type = type;
         }
