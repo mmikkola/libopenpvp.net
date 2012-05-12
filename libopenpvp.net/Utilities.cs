@@ -10,8 +10,13 @@ namespace libopenpvp.net
 
         public static long CurrentTimeMillis()
         {
+            return GetTimeMillis(DateTime.UtcNow);
+        }
+
+        public static long GetTimeMillis(DateTime time)
+        {
             var unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            return (long)(DateTime.UtcNow - unixEpoch).TotalMilliseconds;
+            return (long)(time - unixEpoch).TotalMilliseconds;
         }
     }
 }

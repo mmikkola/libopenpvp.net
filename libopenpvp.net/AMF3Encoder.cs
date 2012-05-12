@@ -1,23 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Text;
 
 namespace libopenpvp.net
 {
-    internal class AMF3Encoder
+    public class AMF3Encoder
     {
         /** RNG used for generating MessageIDs */
         private static Random _rand = new Random();
 
         /** Used for generating timestamps in headers */
-        private readonly long _startTime = CurrentTimeMillis();
-
-
-        private static long CurrentTimeMillis()
-        {
-            var unixEpoch = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-            return (long) (DateTime.UtcNow - unixEpoch).TotalMilliseconds;
-        }
+        private readonly long _startTime = Utilities.CurrentTimeMillis();
 
         /// <summary>
         /// Adds headers to provided data.
@@ -32,7 +26,7 @@ namespace libopenpvp.net
             result.Add(0x03);
 
             // Timestamp
-            long timediff = CurrentTimeMillis() - _startTime;
+            long timediff = Utilities.CurrentTimeMillis() - _startTime;
             result.Add((byte) ((timediff & 0xFF0000) >> 16));
             result.Add((byte) ((timediff & 0x00FF00) >> 8));
             result.Add((byte) (timediff & 0x0000FF));
@@ -61,15 +55,15 @@ namespace libopenpvp.net
         }
 
         /// <summary>
-        /// Encodes the given parameters as a connect packet
+        /// Encodes the given parameters as a val packet
         /// </summary>
         /// <param name="parameters">The connection parameters.</param>
-        /// <returns>The connect packet.</returns>
-        public byte[] encodeConnect(Dictionary<String, Object> parameters)
+        /// <returns>The val packet.</returns>
+        public byte[] encodeConnect(Dictionary<string, object> parameters)
         {
             var result = new List<byte>();
 
-            writeStringAMFO(result, "connect");
+            writestringAMFO(result, "val");
             // Write invokeid
             writeIntAMFO(result, 1);
 
@@ -81,8 +75,8 @@ namespace libopenpvp.net
             // Write service call args
             result.Add(0x01);
             result.Add(0x00); // False
-            writeStringAMFO(result, "nil");
-            writeStringAMFO(result, "");
+            writestringAMFO(result, "nil");
+            writestringAMFO(result, "");
 
             // Set up CommandMessage
             var cm = new TypedObject("flex.messaging.messages.CommandMessage");
@@ -102,19 +96,19 @@ namespace libopenpvp.net
             cm.Add("headers", headers);
 
             // Write CommandMessage
-            result.Add(0x11); // AMF3 Object
+            result.Add(0x11); // AMF3 object
             encode(result, cm);
 
             return AddHeaders(result.ToArray());
         }
         
         /// <summary>
-        /// Encodes the given data as a connect packet
+        /// Encodes the given data as a val packet
         /// </summary>
         /// <param name="id">The invoke ID</param>
         /// <param name="data">The data to invoke</param>
         /// <returns></returns>
-        public byte[] encodeInvoke(int id, Object data)
+        public byte[] encodeInvoke(int id, object data)
         {
             List<byte> result = new List<byte>();
 
@@ -123,7 +117,7 @@ namespace libopenpvp.net
             writeIntAMFO(result, id); // Invoke ID
             result.Add(0x05); // ???
 
-            result.Add(0x11); // AMF3 Object
+            result.Add(0x11); // AMF3 object
 
             encode(result, data);
 
@@ -135,7 +129,7 @@ namespace libopenpvp.net
         /// </summary>
         /// <param name="obj">The object to encode</param>
         /// <returns>The encoded object</returns>
-        public byte[] encode(Object obj)
+        public byte[] encode(object obj)
         {
             List<byte> result = new List<byte>();
 
@@ -148,7 +142,7 @@ namespace libopenpvp.net
         /// </summary>
         /// <param name="ret">The buffer to encode to</param>
         /// <param name="obj">The object to encode</param>
-        private void encode(List<byte> ret, Object obj)
+        private void encode(List<byte> ret, object obj)
         {
             if (obj == null)
             {
@@ -177,10 +171,10 @@ namespace libopenpvp.net
                 ret.Add(0x05);
                 writeDouble(ret, (double) obj);
             }
-            else if (obj is String)
+            else if (obj is string)
             {
                 ret.Add(0x06);
-                writeString(ret, (String) obj);
+                writeString(ret, (string) obj);
             }
             else if (obj is DateTime)
             {
@@ -192,50 +186,120 @@ namespace libopenpvp.net
                 ret.Add(0x0C);
                 writeByteArray(ret, (byte[]) obj);
             }
-            else if (obj is Object[])
+            else if (obj is object[])
             {
                 ret.Add(0x09);
-                writeArray(ret, (Object[]) obj);
+                writeArray(ret, (object[]) obj);
             }
             else if (obj is TypedObject)
             {
                 ret.Add(0x0A);
-                writeObject(ret, (TypedObject) obj);
+                writeobject(ret, (TypedObject) obj);
             }
-            else if (obj is Dictionary<String,Object>)
+            else if (obj is Dictionary<string,object>)
             {
                 ret.Add(0x0A);
-                writeAssociativeArray(ret, (Dictionary<String, Object>) obj);            
+                writeAssociativeArray(ret, (Dictionary<string, object>) obj);            
             }
             else
             {
-                throw new EncodingException("Unexpected Object Type: " + obj);
+                throw new EncodingException("Unexpected object Type: " + obj);
             }
         }
 
-        private void writeObject(List<byte> ret, TypedObject typedObject)
+        /// <summary>
+        /// Encodes an object as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The object to encode</param>
+        private void writeobject(List<byte> ret, TypedObject val)
         {
-            throw new NotImplementedException();
+            if (val.Type == null || val.Type.Equals(""))
+            {
+                ret.Add(0x08); // Dynamic class with no members
+                ret.Add(0x01); // No class name
+                foreach(string key in val.Keys)
+                {
+                    writeString(ret, key);
+                    encode(ret, val[key]);
+                }
+                ret.Add(0x01); // End of dynamic
+            }
+            else if (val.Type.Equals("flex.messaging.io.ArrayCollection"))
+            {
+                ret.Add(0x07); // Externalizeable
+                writeString(ret, val.Type);
+                encode(ret, val["array"]);
+            }
+            else
+            {
+                writeInt(ret, (val.Count << 4) | 3); // Inline + member count
+                writeString(ret, val.Type);
+
+                List<string> keyOrder = new List<string>();
+                foreach (string key in val.Keys)
+                {
+                    writeString(ret, key);
+                    keyOrder.Add(key);
+                }
+                foreach (string s in keyOrder)
+                {
+                    encode(ret, val[s]);
+                }
+
+            }
         }
 
-        private void writeIntAMFO(List<byte> result, int i)
+        /// <summary>
+        /// Encodes an integer as AMFO to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The integer to encode</param>
+        private void writeIntAMFO(List<byte> ret, int val)
         {
-            throw new NotImplementedException();
+            ret.Add(0x00);
+
+            byte[] temp = new byte[8];
+            MemoryStream memoryStream = new MemoryStream(temp);
+            BinaryWriter binaryWriter = new BinaryWriter(memoryStream);
+            binaryWriter.Write(val);
+
+            foreach (byte b in temp)
+            {
+                ret.Add(b);
+            }
         }
 
-        private void writeAssociativeArray(List<byte> result, Dictionary<string, object> parameters)
+        /// <summary>
+        /// Encodes an Associative Array as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The Array to encode</param>
+        private void writeAssociativeArray(List<byte> ret, Dictionary<string, object> val)
         {
-            throw new NotImplementedException();
+            ret.Add(0x01);
+
+            foreach(string key in val.Keys)
+            {
+                writeString(ret, key);
+                encode(ret, val[key]);
+            }
+            ret.Add(0x01);
         }
 
-        private object randomUID()
-        {
-            throw new NotImplementedException();
-        }
-
+        /// <summary>
+        /// Encodes an array of objects as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="objects">The array to encode</param>
         private void writeArray(List<byte> ret, object[] objects)
         {
-            throw new NotImplementedException();
+            writeInt(ret, (objects.Length << 1) | 1);
+            ret.Add(0x01);
+            foreach (object o in objects)
+            {
+                encode(ret, o);
+            }
         }
 
         private void writeByteArray(List<byte> ret, byte[] bytes)
@@ -243,16 +307,37 @@ namespace libopenpvp.net
             throw new NotImplementedException();
         }
 
+        /// <summary>
+        /// Encodes a DateTime object as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="dateTime">The DateTime object to encode</param>
         private void writeDateTime(List<byte> ret, DateTime dateTime)
         {
-            throw new NotImplementedException();
+            ret.Add(0x01);
+
+            writeDouble(ret, (double) Utilities.GetTimeMillis(dateTime));
         }
 
-        private void writeString(List<byte> ret, string s)
+        /// <summary>
+        /// Writes a string as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The string to encode</param>
+        private void writeString(List<byte> ret, string val)
         {
-            throw new NotImplementedException();
+            writeInt(ret, (val.Length << 1) | 1);
+
+            UTF8Encoding utf8 = new UTF8Encoding();
+
+            ret.AddRange(utf8.GetBytes(val));
         }
 
+        /// <summary>
+        /// Encodes a double as AMF3 to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The double to encode</param>
         private void writeDouble(List<byte> ret, double val)
         {
             if(Double.IsNaN(val))
@@ -309,9 +394,46 @@ namespace libopenpvp.net
             }
         }
 
-        private void writeStringAMFO(List<byte> result, string connect)
+        /// <summary>
+        /// Encodes a string as AMFO to the given buffer
+        /// </summary>
+        /// <param name="ret">The buffer to encode to</param>
+        /// <param name="val">The string to encode</param>
+        private void writestringAMFO(List<byte> ret, string val)
         {
-            throw new NotImplementedException();
+            byte[] temp = null;
+            UTF8Encoding utf8 = new UTF8Encoding();
+            temp = utf8.GetBytes(val);
+
+            ret.Add(0x02);
+
+            ret.Add((byte) ((temp.Length & 0xFF00) >> 8));
+            ret.Add((byte) (temp.Length & 0x00FF));
+
+            foreach (byte b in temp)
+            {
+                ret.Add(b);
+            }
+
+        }
+
+        public static string randomUID()
+        {
+            byte[] bytes = new byte[16];
+
+            _rand.NextBytes(bytes);
+
+            StringBuilder ret = new StringBuilder();
+            for(int i = 0; i < bytes.Length; i++)
+            {
+                if (i == 4 || i == 6 || i == 8 || i == 10)
+                {
+                    ret.Append('-');
+                }
+                ret.Append(string.Format("{0,2,X}", bytes[i]));
+            }
+
+            return ret.ToString();
         }
     }
 }
